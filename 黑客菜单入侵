@@ -1,0 +1,862 @@
+-- 黑色主题开发者工具 - 包含物体变色和黑客系统
+-- 仅供Roblox Studio创作使用
+-- 保存为LocalScript放入StarterGui
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Lighting = game:GetService("Lighting")
+local TweenService = game:GetService("TweenService")
+local Workspace = game:GetService("Workspace")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+-- 颜色主题配置
+local theme = {
+    darkRed = Color3.fromRGB(15, 0, 0),
+    red = Color3.fromRGB(255, 50, 50),
+    brightRed = Color3.fromRGB(255, 0, 0),
+    black = Color3.fromRGB(0, 0, 0),
+    darkGray = Color3.fromRGB(20, 20, 20)
+}
+
+-- 状态变量
+local isThemeActive = false
+local originalColors = {}
+local activeParticles = {}
+local originalMaterials = {}
+local activeSurfaceGuis = {}
+
+-- 缩放状态变量
+local isMinimized = false
+local originalSize = UDim2.new(0, 450, 0, 350)
+local minimizedSize = UDim2.new(0, 200, 0, 35)
+local originalPosition = UDim2.new(0.5, -225, 0.5, -175)
+
+-- 创建主UI
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "HackerMenu"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ScreenGui.DisplayOrder = 999
+
+-- 主窗口
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = originalSize
+MainFrame.Position = originalPosition
+MainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+MainFrame.BackgroundColor3 = theme.darkRed
+MainFrame.BorderColor3 = Color3.fromRGB(80, 0, 0)
+MainFrame.BorderSizePixel = 3
+MainFrame.BackgroundTransparency = 0.15
+
+-- 标题栏
+local TitleBar = Instance.new("Frame")
+TitleBar.Name = "TitleBar"
+TitleBar.Size = UDim2.new(1, 0, 0, 35)
+TitleBar.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+TitleBar.BorderColor3 = Color3.fromRGB(150, 0, 0)
+
+local TitleText = Instance.new("TextLabel")
+TitleText.Name = "TitleText"
+TitleText.Size = UDim2.new(1, -100, 1, 0)
+TitleText.Position = UDim2.new(0, 10, 0, 0)
+TitleText.BackgroundTransparency = 1
+TitleText.Text = "黑客菜单"
+TitleText.TextColor3 = theme.red
+TitleText.Font = Enum.Font.GothamBold
+TitleText.TextSize = 16
+TitleText.TextXAlignment = Enum.TextXAlignment.Left
+
+local MinimizeButton = Instance.new("TextButton")
+MinimizeButton.Name = "MinimizeButton"
+MinimizeButton.Size = UDim2.new(0, 30, 0, 30)
+MinimizeButton.Position = UDim2.new(1, -70, 0.5, -15)
+MinimizeButton.AnchorPoint = Vector2.new(0, 0.5)
+MinimizeButton.BackgroundColor3 = Color3.fromRGB(40, 0, 0)
+MinimizeButton.BorderColor3 = Color3.fromRGB(100, 0, 0)
+MinimizeButton.Text = "_"
+MinimizeButton.TextColor3 = theme.red
+MinimizeButton.Font = Enum.Font.GothamBold
+MinimizeButton.TextSize = 16
+MinimizeButton.ZIndex = 10
+
+local CloseButton = Instance.new("TextButton")
+CloseButton.Name = "CloseButton"
+CloseButton.Size = UDim2.new(0, 30, 0, 30)
+CloseButton.Position = UDim2.new(1, -30, 0.5, -15)
+CloseButton.AnchorPoint = Vector2.new(0, 0.5)
+CloseButton.BackgroundColor3 = Color3.fromRGB(40, 0, 0)
+CloseButton.BorderColor3 = Color3.fromRGB(100, 0, 0)
+CloseButton.Text = "✕"
+CloseButton.TextColor3 = theme.red
+CloseButton.Font = Enum.Font.GothamBold
+CloseButton.TextSize = 16
+CloseButton.ZIndex = 10
+
+-- 内容区域
+local ContentFrame = Instance.new("Frame")
+ContentFrame.Name = "ContentFrame"
+ContentFrame.Size = UDim2.new(1, -20, 1, -55)
+ContentFrame.Position = UDim2.new(0, 10, 0, 45)
+ContentFrame.BackgroundColor3 = Color3.fromRGB(10, 0, 0)
+ContentFrame.BackgroundTransparency = 0.3
+ContentFrame.BorderSizePixel = 0
+
+local ThemeToggleButton = Instance.new("TextButton")
+ThemeToggleButton.Name = "ThemeToggleButton"
+ThemeToggleButton.Size = UDim2.new(0, 250, 0, 50)
+ThemeToggleButton.Position = UDim2.new(0.5, -125, 0.1, 0)
+ThemeToggleButton.BackgroundColor3 = Color3.fromRGB(30, 0, 0)
+ThemeToggleButton.BorderColor3 = Color3.fromRGB(120, 0, 0)
+ThemeToggleButton.BorderSizePixel = 2
+ThemeToggleButton.Text = "💻 启动黑客视觉"
+ThemeToggleButton.TextColor3 = theme.red
+ThemeToggleButton.Font = Enum.Font.GothamBold
+ThemeToggleButton.TextSize = 18
+
+local StatusLabel = Instance.new("TextLabel")
+StatusLabel.Name = "StatusLabel"
+StatusLabel.Size = UDim2.new(0.8, 0, 0, 30)
+StatusLabel.Position = UDim2.new(0.1, 0, 0.3, 0)
+StatusLabel.BackgroundTransparency = 1
+StatusLabel.Text = "系统状态: 待机中"
+StatusLabel.TextColor3 = Color3.fromRGB(200, 100, 100)
+StatusLabel.Font = Enum.Font.Gotham
+StatusLabel.TextSize = 14
+
+-- 特效设置
+local SettingsFrame = Instance.new("Frame")
+SettingsFrame.Name = "SettingsFrame"
+SettingsFrame.Size = UDim2.new(0.9, 0, 0, 150)
+SettingsFrame.Position = UDim2.new(0.05, 0, 0.45, 0)
+SettingsFrame.BackgroundColor3 = Color3.fromRGB(15, 0, 0)
+SettingsFrame.BorderColor3 = Color3.fromRGB(60, 0, 0)
+
+local SettingsTitle = Instance.new("TextLabel")
+SettingsTitle.Name = "SettingsTitle"
+SettingsTitle.Size = UDim2.new(1, 0, 0, 25)
+SettingsTitle.BackgroundColor3 = Color3.fromRGB(25, 0, 0)
+SettingsTitle.BorderColor3 = Color3.fromRGB(80, 0, 0)
+SettingsTitle.Text = "⚙️ 视觉参数"
+SettingsTitle.TextColor3 = theme.red
+SettingsTitle.Font = Enum.Font.GothamBold
+SettingsTitle.TextSize = 14
+
+local ParticleSliderFrame = Instance.new("Frame")
+ParticleSliderFrame.Name = "ParticleSliderFrame"
+ParticleSliderFrame.Size = UDim2.new(1, -20, 0, 40)
+ParticleSliderFrame.Position = UDim2.new(0, 10, 0, 35)
+ParticleSliderFrame.BackgroundTransparency = 1
+
+local ParticleLabel = Instance.new("TextLabel")
+ParticleLabel.Name = "ParticleLabel"
+ParticleLabel.Size = UDim2.new(0.6, 0, 1, 0)
+ParticleLabel.BackgroundTransparency = 1
+ParticleLabel.Text = "光晕强度:"
+ParticleLabel.TextColor3 = Color3.fromRGB(180, 80, 80)
+ParticleLabel.Font = Enum.Font.Gotham
+ParticleLabel.TextSize = 12
+ParticleLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+local ParticleValue = Instance.new("TextLabel")
+ParticleValue.Name = "ParticleValue"
+ParticleValue.Size = UDim2.new(0.3, 0, 1, 0)
+ParticleValue.Position = UDim2.new(0.7, 0, 0, 0)
+ParticleValue.BackgroundTransparency = 1
+ParticleValue.Text = "50%"
+ParticleValue.TextColor3 = theme.red
+ParticleValue.Font = Enum.Font.GothamBold
+ParticleValue.TextSize = 12
+
+local ParticleSlider = Instance.new("Frame")
+ParticleSlider.Name = "ParticleSlider"
+ParticleSlider.Size = UDim2.new(1, 0, 0, 4)
+ParticleSlider.Position = UDim2.new(0, 0, 1, 5)
+ParticleSlider.BackgroundColor3 = Color3.fromRGB(40, 0, 0)
+ParticleSlider.BorderSizePixel = 0
+
+local ParticleSliderFill = Instance.new("Frame")
+ParticleSliderFill.Name = "ParticleSliderFill"
+ParticleSliderFill.Size = UDim2.new(0.5, 0, 1, 0)
+ParticleSliderFill.BackgroundColor3 = theme.red
+ParticleSliderFill.BorderSizePixel = 0
+
+local AdvancedButton = Instance.new("TextButton")
+AdvancedButton.Name = "AdvancedButton"
+AdvancedButton.Size = UDim2.new(0, 180, 0, 35)
+AdvancedButton.Position = UDim2.new(0.5, -90, 0.85, 0)
+AdvancedButton.BackgroundColor3 = Color3.fromRGB(25, 0, 0)
+AdvancedButton.BorderColor3 = Color3.fromRGB(90, 0, 0)
+AdvancedButton.Text = "⚡ 高级工具"
+AdvancedButton.TextColor3 = Color3.fromRGB(200, 100, 100)
+AdvancedButton.Font = Enum.Font.Gotham
+AdvancedButton.TextSize = 12
+
+-- 组装UI
+ParticleSliderFill.Parent = ParticleSlider
+ParticleSlider.Parent = ParticleSliderFrame
+ParticleLabel.Parent = ParticleSliderFrame
+ParticleValue.Parent = ParticleSliderFrame
+ParticleSliderFrame.Parent = SettingsFrame
+SettingsTitle.Parent = SettingsFrame
+SettingsFrame.Parent = ContentFrame
+ThemeToggleButton.Parent = ContentFrame
+StatusLabel.Parent = ContentFrame
+AdvancedButton.Parent = ContentFrame
+TitleText.Parent = TitleBar
+MinimizeButton.Parent = TitleBar
+CloseButton.Parent = TitleBar
+TitleBar.Parent = MainFrame
+ContentFrame.Parent = MainFrame
+MainFrame.Parent = ScreenGui
+ScreenGui.Parent = playerGui
+
+-- UI视觉效果
+local glowEffect = Instance.new("UIStroke")
+glowEffect.Name = "GlowEffect"
+glowEffect.Color = Color3.fromRGB(150, 0, 0)
+glowEffect.Thickness = 2
+glowEffect.Transparency = 0.5
+glowEffect.Parent = MainFrame
+
+local innerGlow = Instance.new("UIStroke")
+innerGlow.Name = "InnerGlow"
+innerGlow.Color = Color3.fromRGB(80, 0, 0)
+innerGlow.Thickness = 1
+innerGlow.Transparency = 0.3
+innerGlow.Parent = ContentFrame
+
+-- 新增：缩放功能函数
+local function toggleMinimize()
+    isMinimized = not isMinimized
+    
+    if isMinimized then
+        MainFrame.Size = minimizedSize
+        ContentFrame.Visible = false
+        MinimizeButton.Text = "□"
+        TitleText.Text = "黑客菜单 [最小化]"
+        
+        MinimizeButton.Position = UDim2.new(1, -70, 0.5, -15)
+        CloseButton.Position = UDim2.new(1, -30, 0.5, -15)
+        
+        TitleBar.Size = UDim2.new(1, 0, 1, 0)
+    else
+        MainFrame.Size = originalSize
+        ContentFrame.Visible = true
+        MinimizeButton.Text = "_"
+        TitleText.Text = "黑客菜单"
+        
+        TitleBar.Size = UDim2.new(1, 0, 0, 35)
+        MinimizeButton.Position = UDim2.new(1, -70, 0.5, -15)
+        CloseButton.Position = UDim2.new(1, -30, 0.5, -15)
+    end
+    
+    local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    local sizeTween = TweenService:Create(MainFrame, tweenInfo, {
+        Size = isMinimized and minimizedSize or originalSize
+    })
+    sizeTween:Play()
+    
+    local buttonTweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    local buttonTween = TweenService:Create(MinimizeButton, buttonTweenInfo, {
+        BackgroundColor3 = isMinimized and Color3.fromRGB(60, 0, 0) or Color3.fromRGB(40, 0, 0)
+    })
+    buttonTween:Play()
+    
+    print(isMinimized and "📱 菜单已最小化" or "🖥️ 菜单已最大化")
+end
+
+-- 可拖动功能
+local dragging = false
+local dragInput, dragStart, startPos
+
+local function update(input)
+    local delta = input.Position - dragStart
+    MainFrame.Position = UDim2.new(
+        startPos.X.Scale, 
+        startPos.X.Offset + delta.X, 
+        startPos.Y.Scale, 
+        startPos.Y.Offset + delta.Y
+    )
+end
+
+TitleBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = MainFrame.Position
+        
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+TitleBar.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement then
+        dragInput = input
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if dragging and input == dragInput then
+        update(input)
+    end
+end)
+
+-- 创建黑核红边发光粒子特效函数
+local function createBlackCoreRedEdgeParticleEffect(part)
+    if not part:IsA("BasePart") then return nil end
+    
+    -- 修复：检查part是否有效
+    if not part:IsDescendantOf(Workspace) then return nil end
+    
+    -- 主粒子发射器 - 黑核红边效果
+    local mainEmitter = Instance.new("ParticleEmitter")
+    mainEmitter.Name = "CoreEdgeParticles"
+    
+    -- 黑核红边的颜色序列
+    mainEmitter.Color = ColorSequence.new({
+        -- 粒子中心为黑色，边缘为红色
+        ColorSequenceKeypoint.new(0.0, Color3.fromRGB(0, 0, 0)),      -- 纯黑中心
+        ColorSequenceKeypoint.new(0.3, Color3.fromRGB(50, 0, 0)),    -- 暗红过渡
+        ColorSequenceKeypoint.new(0.7, Color3.fromRGB(150, 0, 0)),   -- 中红边缘
+        ColorSequenceKeypoint.new(1.0, Color3.fromRGB(255, 0, 0))    -- 亮红外缘
+    })
+    
+    -- 尺寸变化 - 从中心向外扩展
+    mainEmitter.Size = NumberSequence.new({
+        NumberSequenceKeypoint.new(0.0, 0),      -- 从无开始
+        NumberSequenceKeypoint.new(0.2, 1.5),    -- 快速扩展
+        NumberSequenceKeypoint.new(0.5, 3.0),    -- 最大尺寸
+        NumberSequenceKeypoint.new(0.8, 2.0),    -- 开始收缩
+        NumberSequenceKeypoint.new(1.0, 0)       -- 完全消失
+    })
+    
+    -- 透明度变化 - 创造发光边缘效果
+    mainEmitter.Transparency = NumberSequence.new({
+        NumberSequenceKeypoint.new(0.0, 0.8),    -- 中心较透明
+        NumberSequenceKeypoint.new(0.3, 0.4),    -- 边缘开始显现
+        NumberSequenceKeypoint.new(0.6, 0.1),    -- 最亮边缘
+        NumberSequenceKeypoint.new(0.9, 0.4),    -- 边缘开始消散
+        NumberSequenceKeypoint.new(1.0, 0.8)     -- 完全透明
+    })
+    
+    -- 较长的生命周期，展示完整的颜色渐变
+    mainEmitter.Lifetime = NumberRange.new(1.5, 2.5)
+    
+    -- 适中的发射率
+    mainEmitter.Rate = 25
+    
+    -- 旋转效果
+    mainEmitter.Rotation = NumberRange.new(0, 360)
+    
+    -- 缓慢向上飘动
+    mainEmitter.Speed = NumberRange.new(1, 3)
+    
+    -- 较窄的散布角度，创造更集中的效果
+    mainEmitter.VelocitySpread = 30
+    
+    -- 向上加速度
+    mainEmitter.Acceleration = Vector3.new(0, 4, 0)
+    
+    -- 从上方向下发射
+    mainEmitter.EmissionDirection = Enum.NormalId.Top
+    
+    -- 较强的灯光效果，使红边发光
+    mainEmitter.LightEmission = 0.9
+    mainEmitter.LightInfluence = 0
+    
+    -- 粒子形状
+    mainEmitter.Shape = Enum.ParticleEmitterShape.Box
+    mainEmitter.ShapeStyle = Enum.ParticleEmitterShapeStyle.Surface
+    
+    mainEmitter.Enabled = true
+    mainEmitter.Parent = part
+    
+    -- 第二个发射器 - 创造红色光晕效果
+    local glowEmitter = Instance.new("ParticleEmitter")
+    glowEmitter.Name = "RedGlowParticles"
+    
+    -- 纯红色光晕
+    glowEmitter.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0.0, Color3.fromRGB(255, 50, 50)),
+        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 100, 100)),
+        ColorSequenceKeypoint.new(1.0, Color3.fromRGB(255, 50, 50))
+    })
+    
+    -- 较大的光晕尺寸
+    glowEmitter.Size = NumberSequence.new({
+        NumberSequenceKeypoint.new(0.0, 0),
+        NumberSequenceKeypoint.new(0.3, 4),
+        NumberSequenceKeypoint.new(0.7, 6),
+        NumberSequenceKeypoint.new(1.0, 0)
+    })
+    
+    -- 高度透明的光晕
+    glowEmitter.Transparency = NumberSequence.new({
+        NumberSequenceKeypoint.new(0.0, 0.7),
+        NumberSequenceKeypoint.new(0.5, 0.4),
+        NumberSequenceKeypoint.new(1.0, 0.9)
+    })
+    
+    -- 较短的生命周期
+    glowEmitter.Lifetime = NumberRange.new(0.8, 1.5)
+    
+    -- 较低的光晕发射率
+    glowEmitter.Rate = 15
+    
+    -- 无旋转
+    glowEmitter.Rotation = NumberRange.new(0, 0)
+    
+    -- 更慢的速度
+    glowEmitter.Speed = NumberRange.new(0.5, 1.5)
+    
+    -- 宽散布角度
+    glowEmitter.VelocitySpread = 60
+    
+    -- 强烈的发光效果
+    glowEmitter.LightEmission = 1.0
+    glowEmitter.LightInfluence = 0
+    
+    glowEmitter.Enabled = true
+    glowEmitter.Parent = part
+    
+    -- 第三个发射器 - 黑色核心粒子
+    local coreEmitter = Instance.new("ParticleEmitter")
+    coreEmitter.Name = "BlackCoreParticles"
+    
+    -- 纯黑色核心
+    coreEmitter.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0.0, Color3.fromRGB(0, 0, 0)),
+        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(10, 0, 0)),
+        ColorSequenceKeypoint.new(1.0, Color3.fromRGB(0, 0, 0))
+    })
+    
+    -- 较小的核心尺寸
+    coreEmitter.Size = NumberSequence.new({
+        NumberSequenceKeypoint.new(0.0, 0.5),
+        NumberSequenceKeypoint.new(0.5, 1.0),
+        NumberSequenceKeypoint.new(1.0, 0.5)
+    })
+    
+    -- 较低透明度
+    coreEmitter.Transparency = NumberSequence.new({
+        NumberSequenceKeypoint.new(0.0, 0.3),
+        NumberSequenceKeypoint.new(0.5, 0.1),
+        NumberSequenceKeypoint.new(1.0, 0.4)
+    })
+    
+    -- 较长的生命周期
+    coreEmitter.Lifetime = NumberRange.new(2.0, 3.0)
+    
+    -- 较高的发射率
+    coreEmitter.Rate = 30
+    
+    -- 随机旋转
+    coreEmitter.Rotation = NumberRange.new(0, 360)
+    
+    -- 中等速度
+    coreEmitter.Speed = NumberRange.new(1.5, 2.5)
+    
+    -- 窄散布角度
+    coreEmitter.VelocitySpread = 20
+    
+    -- 中等发光
+    coreEmitter.LightEmission = 0.3
+    coreEmitter.LightInfluence = 0
+    
+    coreEmitter.Enabled = true
+    coreEmitter.Parent = part
+    
+    return {core = coreEmitter, edge = mainEmitter, glow = glowEmitter}
+end
+
+-- 安全地应用黑客主题到物体
+local function applyHackerThemeToObject(obj)
+    if not obj or not obj.Parent then return end
+    
+    if obj:IsA("BasePart") then
+        -- 修复：使用pcall防止错误
+        local success, errorMsg = pcall(function()
+            -- 保存原始颜色和材质
+            originalColors[obj] = obj.Color
+            originalMaterials[obj] = obj.Material
+            
+            -- 应用黑客风格颜色
+            obj.Color = Color3.fromRGB(
+                math.random(10, 30),
+                math.random(0, 10),
+                math.random(0, 10)
+            )
+            
+            -- 使用有科技感的材质
+            if obj.Material ~= Enum.Material.Neon then
+                obj.Material = Enum.Material.Glass
+            end
+            
+            -- 添加黑客风格的发光效果
+            local surfaceGui = Instance.new("SurfaceGui")
+            surfaceGui.Face = Enum.NormalId.Top
+            surfaceGui.AlwaysOnTop = true
+            surfaceGui.LightInfluence = 0
+            surfaceGui.Name = "HackerSurfaceGui"
+            
+            local codeFrame = Instance.new("Frame")
+            codeFrame.Size = UDim2.new(1, 0, 1, 0)
+            codeFrame.BackgroundColor3 = Color3.fromRGB(20, 0, 5)
+            codeFrame.BackgroundTransparency = 0.6
+            codeFrame.BorderSizePixel = 0
+            
+            -- 添加一些模拟代码文本
+            local codeText = Instance.new("TextLabel")
+            codeText.Size = UDim2.new(1, 0, 1, 0)
+            codeText.BackgroundTransparency = 1
+            codeText.Text = "01001000\n01100001\n01100011\n01101011"
+            codeText.TextColor3 = Color3.fromRGB(150, 0, 50)
+            codeText.Font = Enum.Font.Code
+            codeText.TextSize = 8
+            codeText.TextTransparency = 0.7
+            codeText.TextYAlignment = Enum.TextYAlignment.Top
+            codeText.Parent = codeFrame
+            
+            codeFrame.Parent = surfaceGui
+            surfaceGui.Parent = obj
+            
+            -- 保存SurfaceGui引用
+            activeSurfaceGuis[obj] = surfaceGui
+            
+            -- 添加黑核红边发光粒子特效
+            local particles = createBlackCoreRedEdgeParticleEffect(obj)
+            if particles then
+                activeParticles[obj] = particles
+            end
+        end)
+        
+        if not success then
+            warn("应用黑客主题到物体时出错: " .. tostring(errorMsg))
+        end
+        
+    elseif obj:IsA("Model") then
+        for _, child in ipairs(obj:GetDescendants()) do
+            applyHackerThemeToObject(child)
+        end
+    end
+end
+
+-- 安全地恢复原始状态
+local function restoreOriginalState()
+    -- 恢复物体颜色和材质
+    for obj, originalColor in pairs(originalColors) do
+        if obj and obj.Parent then
+            local success, errorMsg = pcall(function()
+                obj.Color = originalColor
+                if originalMaterials[obj] then
+                    obj.Material = originalMaterials[obj]
+                end
+                
+                -- 移除黑客特效
+                for _, child in ipairs(obj:GetChildren()) do
+                    if child.Name == "CoreEdgeParticles" or 
+                       child.Name == "RedGlowParticles" or 
+                       child.Name == "BlackCoreParticles" or 
+                       child.Name == "HackerSurfaceGui" then
+                        child:Destroy()
+                    end
+                end
+            end)
+            
+            if not success then
+                warn("恢复物体状态时出错: " .. tostring(errorMsg))
+            end
+        end
+    end
+    
+    -- 清除粒子缓存
+    for _, particles in pairs(activeParticles) do
+        if particles.core and particles.core.Parent then particles.core:Destroy() end
+        if particles.edge and particles.edge.Parent then particles.edge:Destroy() end
+        if particles.glow and particles.glow.Parent then particles.glow:Destroy() end
+    end
+    
+    -- 清除SurfaceGui缓存
+    for _, surfaceGui in pairs(activeSurfaceGuis) do
+        if surfaceGui and surfaceGui.Parent then
+            surfaceGui:Destroy()
+        end
+    end
+    
+    -- 重置所有缓存
+    originalColors = {}
+    originalMaterials = {}
+    activeParticles = {}
+    activeSurfaceGuis = {}
+    
+    -- 恢复天空盒
+    local success, errorMsg = pcall(function()
+        if originalColors["Lighting_Brightness"] then
+            Lighting.Brightness = originalColors["Lighting_Brightness"]
+            Lighting.Ambient = originalColors["Lighting_Ambient"]
+            Lighting.OutdoorAmbient = originalColors["Lighting_OutdoorAmbient"]
+        else
+            Lighting.Brightness = 2
+            Lighting.GlobalShadows = true
+        end
+    end)
+    
+    if not success then
+        warn("恢复光照设置时出错: " .. tostring(errorMsg))
+    end
+end
+
+-- 安全地应用全局黑客效果
+local function applyGlobalHackerTheme()
+    -- 保存并修改光照
+    local success, errorMsg = pcall(function()
+        if not originalColors["Lighting_Brightness"] then
+            originalColors["Lighting_Brightness"] = Lighting.Brightness
+            originalColors["Lighting_Ambient"] = Lighting.Ambient
+            originalColors["Lighting_OutdoorAmbient"] = Lighting.OutdoorAmbient
+        end
+        
+        -- 设置黑客风格光照
+        Lighting.Brightness = 0.7
+        Lighting.Ambient = Color3.fromRGB(15, 0, 5)
+        Lighting.OutdoorAmbient = Color3.fromRGB(10, 0, 3)
+        
+        -- 添加黑客风格雾效
+        if not Lighting:FindFirstChild("HackerFog") then
+            Lighting.FogColor = Color3.fromRGB(25, 0, 10)
+            Lighting.FogEnd = 600
+            Lighting.FogStart = 150
+        end
+    end)
+    
+    if not success then
+        warn("设置光照时出错: " .. tostring(errorMsg))
+        return
+    end
+    
+    -- 处理工作区中的所有物体
+    local success2, errorMsg2 = pcall(function()
+        local workspaceObjects = Workspace:GetDescendants()
+        local processedCount = 0
+        
+        for _, obj in ipairs(workspaceObjects) do
+            if (obj:IsA("BasePart") or obj:IsA("Model")) and not obj:IsA("Terrain") then
+                applyHackerThemeToObject(obj)
+                processedCount = processedCount + 1
+            end
+        end
+        
+        print("已处理 " .. processedCount .. " 个物体")
+    end)
+    
+    if not success2 then
+        warn("处理工作区物体时出错: " .. tostring(errorMsg2))
+    end
+    
+    -- 也处理未来添加的物体（使用pcall包装）
+    Workspace.DescendantAdded:Connect(function(descendant)
+        if isThemeActive and (descendant:IsA("BasePart") or descendant:IsA("Model")) then
+            pcall(function()
+                applyHackerThemeToObject(descendant)
+            end)
+        end
+    end)
+end
+
+-- 黑客视觉切换主函数
+local function toggleHackerVision()
+    isThemeActive = not isThemeActive
+    
+    if isThemeActive then
+        ThemeToggleButton.Text = "🛑 关闭黑客视觉"
+        ThemeToggleButton.BackgroundColor3 = Color3.fromRGB(60, 0, 0)
+        StatusLabel.Text = "系统状态: 视觉覆盖中"
+        StatusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+        
+        print("==================================")
+        print("💻 黑客视觉系统已激活")
+        print("正在植入黑核红边粒子效果...")
+        print("光晕渲染中...")
+        print("==================================")
+        
+        -- 使用延迟防止阻塞
+        task.spawn(function()
+            applyGlobalHackerTheme()
+        end)
+        
+        local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+        local tween = TweenService:Create(ThemeToggleButton, tweenInfo, {
+            BackgroundColor3 = Color3.fromRGB(80, 0, 0)
+        })
+        tween:Play()
+    else
+        ThemeToggleButton.Text = "💻 启动黑客视觉"
+        ThemeToggleButton.BackgroundColor3 = Color3.fromRGB(30, 0, 0)
+        StatusLabel.Text = "系统状态: 待机中"
+        StatusLabel.TextColor3 = Color3.fromRGB(200, 100, 100)
+        
+        print("==================================")
+        print("🛑 黑客视觉系统已终止")
+        print("正在清除粒子效果...")
+        print("恢复默认渲染...")
+        print("==================================")
+        
+        -- 使用延迟防止阻塞
+        task.spawn(function()
+            restoreOriginalState()
+        end)
+    end
+end
+
+-- 光晕强度控制
+ParticleSliderFill.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        local connection
+        connection = input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                connection:Disconnect()
+            else
+                local mousePos = UserInputService:GetMouseLocation()
+                local sliderPos = ParticleSlider.AbsolutePosition
+                local sliderSize = ParticleSlider.AbsoluteSize
+                
+                local relativeX = math.clamp((mousePos.X - sliderPos.X) / sliderSize.X, 0, 1)
+                ParticleSliderFill.Size = UDim2.new(relativeX, 0, 1, 0)
+                ParticleValue.Text = math.floor(relativeX * 100) .. "%"
+                
+                -- 更新所有粒子的强度
+                for obj, particles in pairs(activeParticles) do
+                    if obj and obj.Parent then
+                        pcall(function()
+                            if particles.edge then
+                                particles.edge.Rate = 15 + (relativeX * 35)
+                                particles.edge.LightEmission = 0.5 + (relativeX * 0.5)
+                            end
+                            if particles.glow then
+                                particles.glow.Rate = 10 + (relativeX * 20)
+                                particles.glow.LightEmission = 0.5 + (relativeX * 0.5)
+                            end
+                            if particles.core then
+                                particles.core.Rate = 20 + (relativeX * 40)
+                            end
+                        end)
+                    end
+                end
+            end
+        end)
+    end
+end)
+
+-- 按钮事件
+CloseButton.MouseButton1Click:Connect(function()
+    ScreenGui.Enabled = false
+    print("🔒 黑客菜单已隐藏")
+end)
+
+MinimizeButton.MouseButton1Click:Connect(function()
+    toggleMinimize()
+end)
+
+MinimizeButton.MouseEnter:Connect(function()
+    local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    local tween = TweenService:Create(MinimizeButton, tweenInfo, {
+        BackgroundColor3 = Color3.fromRGB(60, 0, 0),
+        TextColor3 = Color3.fromRGB(255, 80, 80)
+    })
+    tween:Play()
+end)
+
+MinimizeButton.MouseLeave:Connect(function()
+    local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    local tween = TweenService:Create(MinimizeButton, tweenInfo, {
+        BackgroundColor3 = isMinimized and Color3.fromRGB(60, 0, 0) or Color3.fromRGB(40, 0, 0),
+        TextColor3 = theme.red
+    })
+    tween:Play()
+end)
+
+CloseButton.MouseEnter:Connect(function()
+    local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    local tween = TweenService:Create(CloseButton, tweenInfo, {
+        BackgroundColor3 = Color3.fromRGB(80, 0, 0),
+        TextColor3 = Color3.fromRGB(255, 100, 100)
+    })
+    tween:Play()
+end)
+
+CloseButton.MouseLeave:Connect(function()
+    local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    local tween = TweenService:Create(CloseButton, tweenInfo, {
+        BackgroundColor3 = Color3.fromRGB(40, 0, 0),
+        TextColor3 = theme.red
+    })
+    tween:Play()
+end)
+
+ThemeToggleButton.MouseButton1Click:Connect(function()
+    toggleHackerVision()
+end)
+
+AdvancedButton.MouseButton1Click:Connect(function()
+    StatusLabel.Text = "高级黑客工具 (开发中)"
+    print("🔧 高级功能暂未开发")
+end)
+
+-- 添加键盘快捷键
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if not gameProcessed then
+        if input.KeyCode == Enum.KeyCode.H then
+            toggleHackerVision()
+        elseif input.KeyCode == Enum.KeyCode.B then
+            MainFrame.Visible = not MainFrame.Visible
+            print(MainFrame.Visible and "🔓 黑客菜单已显示" or "🔒 黑客菜单已隐藏")
+        elseif input.KeyCode == Enum.KeyCode.M then
+            toggleMinimize()
+        end
+    end
+end)
+
+-- 添加UI显示/隐藏控制
+local function showMenu()
+    ScreenGui.Enabled = true
+    MainFrame.Visible = true
+    print("🔓 黑客菜单已显示")
+end
+
+local function hideMenu()
+    ScreenGui.Enabled = false
+    print("🔒 黑客菜单已隐藏")
+end
+
+-- 初始化完成提示
+print("==================================")
+print("✅ 黑客菜单 - 黑核红边发光视觉系统")
+print("✅ 修复版 - 可注入运行")
+print("")
+print("📋 系统功能:")
+print("• 💻 黑客视觉切换 (H键)")
+print("• 📱 窗口缩放 (M键)")
+print("• 🔒 隐藏/显示 (B键)")
+print("• ⚙️ 光晕强度控制")
+print("• 🎯 黑核红边粒子特效")
+print("• 🔧 高级工具接口")
+print("")
+print("🚀 系统状态: 就绪")
+print("==================================")
+print("")
+print("💡 提示: 点击'启动黑客视觉'开始效果")
+print("💡 提示: 使用滑块调整光晕强度")
+print("💡 提示: 拖动标题栏移动窗口")
+print("==================================")
+
+-- 确保UI可见
+ScreenGui.Enabled = true
+MainFrame.Visible = true
